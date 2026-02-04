@@ -2,226 +2,213 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # Namespace for all resources
-namespace: unmute
+namespace: analysis
 
 # Common labels applied to all resources
-commonLabels:
-  app.kubernetes.io/managed-by: kustomize
-  app.kubernetes.io/part-of: llm-deployment
 
 # Resources to include
 resources:
-  - namespace.yaml
-  - model-downloader-sa.yaml
-  - llm-deployment.yaml
+- namespace.yaml
+- model-downloader-sa.yaml
+- llm-deployment.yaml
 
 # Generate ConfigMap from configuration file
 configMapGenerator:
-  - name: llm-config
-    envs:
-      - ../config/default-config.env
-    options:
-      disableNameSuffixHash: true
+- envs:
+  - config/default-config.env
+  name: llm-config
+  options:
+    disableNameSuffixHash: true
 
 # Replacements to inject config values into manifests
 # Note: Kustomize will replace $(VAR_NAME) patterns in all resources
-replacements:
   # Replace AWS_REGION
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.AWS_REGION
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.initContainers.[name=model-sync].env.[name=AWS_DEFAULT_REGION].value
 
   # Replace VLLM_IMAGE
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.VLLM_IMAGE
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.containers.[name=llm].image
 
   # Replace MODEL_REPO_DASHED in model path
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.MODEL_REPO_DASHED
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.containers.[name=llm].args.0
-        options:
-          delimiter: "models--"
-          index: 1
 
   # Replace MODEL_REPO in served-model-name
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.MODEL_REPO
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.containers.[name=llm].args.1
-        options:
-          delimiter: "="
-          index: 1
 
   # Replace MODEL_MAX_LENGTH
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.MODEL_MAX_LENGTH
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.containers.[name=llm].args.2
-        options:
-          delimiter: "="
-          index: 1
 
   # Replace MODEL_GPU_MEMORY_UTIL
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.MODEL_GPU_MEMORY_UTIL
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.containers.[name=llm].args.4
-        options:
-          delimiter: "="
-          index: 1
 
   # Replace LLM_MEMORY_LIMIT
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.LLM_MEMORY_LIMIT
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.containers.[name=llm].resources.limits.memory
 
   # Replace LLM_MEMORY_REQUEST
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.LLM_MEMORY_REQUEST
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.containers.[name=llm].resources.requests.memory
 
   # Replace LLM_CPU_LIMIT
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.LLM_CPU_LIMIT
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.containers.[name=llm].resources.limits.cpu
 
   # Replace LLM_CPU_REQUEST
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.LLM_CPU_REQUEST
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.containers.[name=llm].resources.requests.cpu
 
   # Replace EMPTYDIR_SIZE
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.EMPTYDIR_SIZE
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.volumes.[name=model-cache].emptyDir.sizeLimit
 
   # Replace INSTANCE_TYPE
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.INSTANCE_TYPE
-    targets:
-      - select:
-          kind: Deployment
-          name: llm
-        fieldPaths:
-          - spec.template.spec.nodeSelector.[node.kubernetes.io/instance-type]
 
   # Replace AWS_ACCOUNT_ID and IAM_ROLE_NAME in ServiceAccount annotation
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.AWS_ACCOUNT_ID
-    targets:
-      - select:
-          kind: ServiceAccount
-          name: model-downloader
-        fieldPaths:
-          - metadata.annotations.[eks.amazonaws.com/role-arn]
-        options:
-          delimiter: ":"
-          index: 4
 
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.IAM_ROLE_NAME
-    targets:
-      - select:
-          kind: ServiceAccount
-          name: model-downloader
-        fieldPaths:
-          - metadata.annotations.[eks.amazonaws.com/role-arn]
-        options:
-          delimiter: "/"
-          index: 1
-
-  # Replace HUGGING_FACE_HUB_TOKEN in secret
-  - source:
-      kind: ConfigMap
-      name: llm-config
-      fieldPath: data.HUGGING_FACE_HUB_TOKEN
-    targets:
-      - select:
-          kind: Secret
-          name: unmute-secrets
-        fieldPaths:
-          - stringData.HUGGING_FACE_HUB_TOKEN
-
-  # Replace config values in download scripts
-  # Note: Script placeholders like $(AWS_ACCOUNT_ID) will be replaced by Kustomize automatically
+replacements:
+- source:
+    fieldPath: data.AWS_REGION
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.initContainers.[name=model-sync].env.[name=AWS_DEFAULT_REGION].value
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.VLLM_IMAGE
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].image
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_REPO_DASHED
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].args.0
+    options:
+      delimiter: models--
+      index: 1
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_REPO
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].args.1
+    options:
+      delimiter: =
+      index: 1
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_MAX_LENGTH
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].args.2
+    options:
+      delimiter: =
+      index: 1
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_GPU_MEMORY_UTIL
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].args.4
+    options:
+      delimiter: =
+      index: 1
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.LLM_MEMORY_LIMIT
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].resources.limits.memory
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.LLM_MEMORY_REQUEST
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].resources.requests.memory
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.LLM_CPU_LIMIT
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].resources.limits.cpu
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.LLM_CPU_REQUEST
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].resources.requests.cpu
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.EMPTYDIR_SIZE
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.volumes.[name=model-cache].emptyDir.sizeLimit
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.INSTANCE_TYPE
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.nodeSelector.[node.kubernetes.io/instance-type]
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.AWS_ACCOUNT_ID
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - metadata.annotations.[eks.amazonaws.com/role-arn]
+    options:
+      delimiter: ':'
+      index: 4
+    select:
+      kind: ServiceAccount
+      name: model-downloader
+- source:
+    fieldPath: data.IAM_ROLE_NAME
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - metadata.annotations.[eks.amazonaws.com/role-arn]
+    options:
+      delimiter: /
+      index: 1
+    select:
+      kind: ServiceAccount
+      name: model-downloader
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/part-of: llm-deployment

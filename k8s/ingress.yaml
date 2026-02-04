@@ -1,8 +1,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: unmute-ingress
-  namespace: unmute
+  name: analysis-ingress
+  namespace: analysis
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
@@ -42,7 +42,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: stt-external
-  namespace: unmute
+  namespace: analysis
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
@@ -61,7 +61,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: tts-external
-  namespace: unmute
+  namespace: analysis
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
@@ -80,7 +80,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: llm-external
-  namespace: unmute
+  namespace: analysis
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing

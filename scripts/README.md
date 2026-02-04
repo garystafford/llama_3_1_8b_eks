@@ -1,6 +1,6 @@
-# Scripts
+# Utility Scripts
 
-Utility scripts for the Unmute project.
+Utility scripts for the analysis project.
 
 ## Setup
 
@@ -11,6 +11,15 @@ python -m pip install virtualenv --break-system-packages -Uq
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r scripts/requirements.txt -Uq
+```
+
+## Required Environment Variables
+
+These are all the environment variables required for the scripts.
+
+```bash
+export HUGGING_FACE_HUB_TOKEN=<your_hf_token>
+export S3_BUCKET=<your_s3_bucket_name>
 ```
 
 ## Scripts
@@ -30,7 +39,8 @@ Downloads Meta-Llama-3.1-8B-Instruct model weights from HuggingFace Hub and uplo
 
 ```bash
 # Set your HuggingFace token
-export HUGGING_FACE_HUB_TOKEN=your_token_here
+export HUGGING_FACE_HUB_TOKEN=<your_hf_token>
+export S3_BUCKET=<your_s3_bucket_name>
 
 # Upload LLM model (~16GB)
 ./scripts/upload-models-to-s3.sh all
@@ -55,11 +65,3 @@ export HUGGING_FACE_HUB_TOKEN=your_token_here
 | Model                                   | S3 Path                      | Size  |
 | --------------------------------------- | ---------------------------- | ----- |
 | `meta-llama/Meta-Llama-3.1-8B-Instruct` | `s3://.../llm-models/llm/`   | ~16GB |
-
-### audit-security-groups.sh
-
-Audits AWS security groups for potential issues.
-
-```bash
-./scripts/audit-security-groups.sh
-```

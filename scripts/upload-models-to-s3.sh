@@ -17,13 +17,14 @@
 #   python -m pip install -r scripts/requirements.txt -Uq
 #
 # Usage:
-#   export HUGGING_FACE_HUB_TOKEN=your_token
+#   export HUGGING_FACE_HUB_TOKEN=<your_hf_token>
+#   export S3_BUCKET=<your_s3_bucket_name>
 #   ./scripts/upload-models-to-s3.sh all
 
 set -e
 
 # Configuration
-S3_BUCKET="s3://676164205626-sagemaker-us-east-1/llm-models"
+S3_BUCKET="s3://${S3_BUCKET}/audio-models/"
 HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}/hub"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 

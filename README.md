@@ -19,15 +19,15 @@ This repository provides a production-grade Amazon EKS deployment for Meta-Llama
 
 ### Key Features
 
-| Feature                | Description                                                     |
-| ---------------------- | --------------------------------------------------------------- |
-| **Model**              | Meta-Llama-3.1-8B-Instruct (16GB model size)                   |
-| **Inference Engine**   | vLLM v0.11.0 with OpenAI-compatible API                        |
-| **Model Loading**      | S3 + init containers (3-5 min startup)                         |
-| **GPU**                | g6e.xlarge (NVIDIA L40S, 48GB VRAM)                            |
-| **Context Length**     | 8192 tokens (configurable)                                     |
-| **Access Control**     | LoadBalancer with source IP restrictions                       |
-| **IAM**                | IRSA (IAM Roles for Service Accounts) for keyless S3 access   |
+| Feature              | Description                                                 |
+| -------------------- | ----------------------------------------------------------- |
+| **Model**            | Meta-Llama-3.1-8B-Instruct (16GB model size)                |
+| **Inference Engine** | vLLM v0.11.0 with OpenAI-compatible API                     |
+| **Model Loading**    | S3 + init containers (3-5 min startup)                      |
+| **GPU**              | g6e.xlarge (NVIDIA L40S, 48GB VRAM)                         |
+| **Context Length**   | 8192 tokens (configurable)                                  |
+| **Access Control**   | LoadBalancer with source IP restrictions                    |
+| **IAM**              | IRSA (IAM Roles for Service Accounts) for keyless S3 access |
 
 ## Quick Start
 
@@ -45,6 +45,7 @@ python3 --version
 ```
 
 **Required AWS Resources** (must already exist):
+
 - EKS cluster with GPU nodes (g6e.xlarge or similar)
 - IAM role for IRSA (S3 access)
 - S3 bucket for model storage
@@ -63,7 +64,8 @@ source .venv/bin/activate
 pip install -r scripts/requirements.txt
 
 # Set your HuggingFace token (required - you must accept Llama license on HuggingFace first)
-export HUGGING_FACE_HUB_TOKEN=hf_your_token_here
+export HUGGING_FACE_HUB_TOKEN=<your_hf_token>
+export S3_BUCKET=<your_s3_bucket_name>
 
 # Upload model to S3 (~16GB download + upload)
 ./scripts/upload-models-to-s3.sh all
@@ -74,7 +76,7 @@ export HUGGING_FACE_HUB_TOKEN=hf_your_token_here
 The project uses Kustomize for configuration management. Update configuration values in one place:
 
 ```bash
-# Copy the example config and customize it
+# Copy the example config and customize it (1x)
 cp k8s/config/default-config.env.example k8s/config/default-config.env
 
 # Edit the config file with your values
@@ -100,13 +102,13 @@ kubectl apply -k k8s/base
 kubectl apply -k k8s/overlays/production
 
 # Check deployment status
-kubectl get pods -n unmute -w
+kubectl get pods -n analysis -w
 
 # Check init container logs (model download from S3)
-kubectl logs -n unmute <pod-name> -c model-sync
+kubectl logs -n analysis <pod-name> -c model-sync
 
 # Check LLM container logs
-kubectl logs -n unmute <pod-name> -c llm
+kubectl logs -n analysis <pod-name> -c llm
 ```
 
 Alternative: Deploy without Kustomize (using raw manifests in `k8s/base/`):
@@ -125,17 +127,17 @@ The deployment creates an internal ClusterIP service. To access it externally, c
 
 ```bash
 # Create LoadBalancer service to expose the LLM API
-kubectl expose deployment llm -n unmute \
+kubectl expose deployment llm -n analysis \
   --type=LoadBalancer \
   --name=llm-external \
   --port=8000 \
   --target-port=8000
 
 # Wait for LoadBalancer to be provisioned
-kubectl get svc llm-external -n unmute -w
+kubectl get svc llm-external -n analysis -w
 
 # Get the LoadBalancer URL
-export LLM_URL=$(kubectl get svc llm-external -n unmute -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+export LLM_URL=$(kubectl get svc llm-external -n analysis -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 echo "LLM API URL: http://${LLM_URL}:8000"
 
 # Test the API - List available models
@@ -157,7 +159,7 @@ Alternative: Use port-forwarding for local testing:
 
 ```bash
 # Forward local port 8000 to the LLM service
-kubectl port-forward -n unmute svc/llm 8000:8000
+kubectl port-forward -n analysis svc/llm 8000:8000
 
 # In another terminal, test the API
 curl http://localhost:8000/v1/models
@@ -180,19 +182,19 @@ All configuration is managed through Kustomize using a single configuration file
 
 Edit `k8s/config/default-config.env` to customize your deployment:
 
-| Variable                  | Description                                      | Default                              |
-| ------------------------- | ------------------------------------------------ | ------------------------------------ |
-| `AWS_ACCOUNT_ID`          | Your AWS account ID                              | `676164205626`                       |
-| `AWS_REGION`              | AWS region                                       | `us-east-1`                          |
-| `S3_BUCKET_NAME`          | S3 bucket name for model storage                | `llm-models`                         |
-| `MODEL_REPO`              | HuggingFace model repository                    | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
-| `MODEL_MAX_LENGTH`        | Maximum context length                          | `8192`                               |
-| `VLLM_IMAGE`              | vLLM container image                            | `vllm/vllm-openai:v0.11.0`          |
-| `LLM_MEMORY_LIMIT`        | Memory limit for LLM container                  | `24Gi`                               |
-| `LLM_MEMORY_REQUEST`      | Memory request for LLM container                | `12Gi`                               |
-| `INSTANCE_TYPE`           | EC2 instance type for GPU nodes                 | `g6e.xlarge`                         |
-| `IAM_ROLE_NAME`           | IAM role name for S3 access                     | `deepfake-pytorch-eks-model-downloader` |
-| `HUGGING_FACE_HUB_TOKEN`  | HuggingFace API token                           | `hf_your_token_here`                 |
+| Variable                 | Description                      | Default                                 |
+| ------------------------ | -------------------------------- | --------------------------------------- |
+| `AWS_ACCOUNT_ID`         | Your AWS account ID              | `676164205626`                          |
+| `AWS_REGION`             | AWS region                       | `us-east-1`                             |
+| `S3_BUCKET_NAME`         | S3 bucket name for model storage | `llm-models`                            |
+| `MODEL_REPO`             | HuggingFace model repository     | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
+| `MODEL_MAX_LENGTH`       | Maximum context length           | `8192`                                  |
+| `VLLM_IMAGE`             | vLLM container image             | `vllm/vllm-openai:v0.11.0`              |
+| `LLM_MEMORY_LIMIT`       | Memory limit for LLM container   | `24Gi`                                  |
+| `LLM_MEMORY_REQUEST`     | Memory request for LLM container | `12Gi`                                  |
+| `INSTANCE_TYPE`          | EC2 instance type for GPU nodes  | `g6e.xlarge`                            |
+| `IAM_ROLE_NAME`          | IAM role name for S3 access      | `deepfake-pytorch-eks-model-downloader` |
+| `HUGGING_FACE_HUB_TOKEN` | HuggingFace API token            | `hf_your_token_here`                    |
 
 See [`k8s/config/default-config.env.example`](k8s/config/default-config.env.example) for all available options.
 
@@ -245,25 +247,25 @@ API Client
 ┌────────────────────────────────────────┐
 │ EKS Cluster                            │
 │                                        │
-│  GPU Node (g6e.xlarge)                │
-│  ┌──────────────────────────────────┐ │
-│  │ LLM Pod                          │ │
-│  │  ┌────────────────────────────┐  │ │
-│  │  │ Init Container (aws-cli)   │  │ │
-│  │  │  - Downloads model from S3 │  │ │
-│  │  │  - Caches to EmptyDir      │  │ │
-│  │  └────────────────────────────┘  │ │
-│  │  ┌────────────────────────────┐  │ │
-│  │  │ vLLM Container             │  │ │
-│  │  │  - Loads cached model      │  │ │
-│  │  │  - Serves OpenAI API       │  │ │
-│  │  │  - Port 8000               │  │ │
-│  │  └────────────────────────────┘  │ │
-│  └──────────────────────────────────┘ │
+│  GPU Node (g6e.xlarge)                 │
+│  ┌──────────────────────────────────┐  │
+│  │ LLM Pod                          │  │
+│  │  ┌────────────────────────────┐  │  │
+│  │  │ Init Container (aws-cli)   │  │  │
+│  │  │  - Downloads model from S3 │  │  │
+│  │  │  - Caches to EmptyDir      │  │  │
+│  │  └────────────────────────────┘  │  │
+│  │  ┌────────────────────────────┐  │  │
+│  │  │ vLLM Container             │  │  │
+│  │  │  - Loads cached model      │  │  │
+│  │  │  - Serves OpenAI API       │  │  │
+│  │  │  - Port 8000               │  │  │
+│  │  └────────────────────────────┘  │  │
+│  └──────────────────────────────────┘  │
 └────────────────────────────────────────┘
-    ↓
-[S3 Bucket: llm-models/llm/]
-    (Model: Meta-Llama-3.1-8B-Instruct)
+                  ↓
+     [S3 Bucket: llm-models/llm/]
+  (Model: Meta-Llama-3.1-8B-Instruct)
 ```
 
 ### Model Loading Flow
@@ -297,11 +299,13 @@ API Client
 ### Pod Not Starting
 
 Check init container logs for S3 download issues:
+
 ```bash
-kubectl logs -n unmute <pod-name> -c model-sync
+kubectl logs -n analysis <pod-name> -c model-sync
 ```
 
 Common issues:
+
 - IRSA role not configured correctly
 - S3 bucket doesn't exist or is in different region
 - Model files not uploaded to S3
@@ -309,11 +313,13 @@ Common issues:
 ### Model Not Loading
 
 Check vLLM container logs:
+
 ```bash
-kubectl logs -n unmute <pod-name> -c llm
+kubectl logs -n analysis <pod-name> -c llm
 ```
 
 Common issues:
+
 - Insufficient GPU memory (need 48GB VRAM for 8B model)
 - Model path incorrect in deployment
 - HuggingFace token not set correctly
@@ -321,12 +327,14 @@ Common issues:
 ### LoadBalancer Not Accessible
 
 Check service status:
+
 ```bash
-kubectl get svc llm-external -n unmute
-kubectl describe svc llm-external -n unmute
+kubectl get svc llm-external -n analysis
+kubectl describe svc llm-external -n analysis
 ```
 
 Common issues:
+
 - Security groups blocking traffic
 - LoadBalancer not yet provisioned (can take 2-3 minutes)
 - Wrong AWS region

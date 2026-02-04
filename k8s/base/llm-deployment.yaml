@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: llm
-  namespace: unmute
+  namespace: analysis
   labels:
     app: llm
 spec:
@@ -52,11 +52,6 @@ spec:
             - containerPort: 8000
               protocol: TCP
           env:
-            - name: HUGGING_FACE_HUB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: unmute-secrets
-                  key: HUGGING_FACE_HUB_TOKEN
             # Point HuggingFace cache to pre-downloaded models
             - name: HF_HOME
               value: /models/.cache/huggingface
@@ -105,13 +100,13 @@ spec:
           effect: "NoSchedule"
       nodeSelector:
         node.kubernetes.io/instance-type: $(INSTANCE_TYPE)
-        workload: unmute
+        workload: analysis
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: llm
-  namespace: unmute
+  namespace: analysis
 spec:
   selector:
     app: llm

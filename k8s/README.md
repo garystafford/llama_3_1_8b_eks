@@ -1,14 +1,6 @@
 # Kubernetes Deployment
 
-📖 **Full deployment guide has moved to:** [docs/eks-deployment-guide.md](../docs/eks-deployment-guide.md)
-
-This directory contains all Kubernetes manifest files for deploying the Unmute voice AI application to Amazon EKS.
-
-## Quick Reference
-
-- **Deployment Guide**: [docs/eks-deployment-guide.md](../docs/eks-deployment-guide.md)
-- **Architecture**: [docs/unmute-eks-architecture.md](../docs/unmute-eks-architecture.md)
-- **Terraform Infrastructure**: [terraform/](../terraform/)
+This directory contains all Kubernetes manifest files for deploying the analysis voice AI application to Amazon EKS.
 
 ## Manifest Files
 

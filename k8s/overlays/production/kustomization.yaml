@@ -6,7 +6,7 @@ resources:
   - ../../base
 
 # Override namespace if needed
-# namespace: unmute-prod
+# namespace: analysis-prod
 
 # Production-specific labels
 commonLabels:

@@ -16,7 +16,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: model-downloader
-  namespace: unmute
+  namespace: analysis
   annotations:
     # Replaced by Kustomize from config
     eks.amazonaws.com/role-arn: arn:aws:iam::$(AWS_ACCOUNT_ID):role/$(IAM_ROLE_NAME)
@@ -25,7 +25,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: model-download-script
-  namespace: unmute
+  namespace: analysis
 data:
   download-stt.sh: |
     #!/bin/bash
@@ -33,7 +33,7 @@ data:
 
     DOWNLOAD_DIR="/models/.cache/huggingface/hub"
     MARKER_FILE="/models/.cache/.stt-download-complete"
-    S3_BUCKET="s3://$(AWS_ACCOUNT_ID)-sagemaker-$(AWS_REGION)/$(S3_BUCKET_NAME)"
+    S3_BUCKET="s3://$(AWS_ACCOUNT_ID)-sagemaker-$(AWS_REGION)/$(S3_BUCKET_NAME)/audio-models/"
 
     mkdir -p "${DOWNLOAD_DIR}"
 
