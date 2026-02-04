@@ -7,7 +7,7 @@ resources:
   - llm-loadbalancer.yaml
 
 # Override namespace if needed
-# namespace: analysis-prod
+namespace: analysis
 
 # Production-specific labels
 commonLabels:
@@ -190,16 +190,56 @@ labels:
     app.kubernetes.io/part-of: llm-deployment
 
 # Production-specific patches
-# Uncomment to apply resource adjustments
-# patchesStrategicMerge:
-#   - patches/llm-resources.yaml
+# Override download script with fixed version
+patchesStrategicMerge:
+  - download-llm-fixed.yaml
 
-# Example: Increase replicas for production
-# patches:
-#   - target:
-#       kind: Deployment
-#       name: llm
-#     patch: |-
-#       - op: replace
-#         path: /spec/replicas
-#         value: 2
+# Update nodeSelector to match actual node labels
+patches:
+  - target:
+      kind: Deployment
+      name: llm
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/nodeSelector/workload
+        value: personaplex-server
+      - op: add
+        path: /spec/template/spec/initContainers/0/env/-
+        value:
+          name: AWS_ACCOUNT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: llm-config
+              key: AWS_ACCOUNT_ID
+      - op: add
+        path: /spec/template/spec/initContainers/0/env/-
+        value:
+          name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: llm-config
+              key: AWS_REGION
+      - op: add
+        path: /spec/template/spec/initContainers/0/env/-
+        value:
+          name: S3_BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: llm-config
+              key: S3_BUCKET_NAME
+      - op: add
+        path: /spec/template/spec/initContainers/0/env/-
+        value:
+          name: MODEL_REPO
+          valueFrom:
+            configMapKeyRef:
+              name: llm-config
+              key: MODEL_REPO
+      - op: add
+        path: /spec/template/spec/initContainers/0/env/-
+        value:
+          name: MODEL_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: llm-config
+              key: MODEL_NAME
