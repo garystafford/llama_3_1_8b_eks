@@ -89,17 +89,41 @@ vim k8s/config/default-config.env
 
 ### 4. Deploy to EKS
 
-Using Kustomize (recommended):
+**Production Deployment** (recommended - includes external LoadBalancer):
 
 ```bash
+# Configure production overlay
+cp k8s/overlays/production/config.env.example k8s/overlays/production/config.env
+vim k8s/overlays/production/config.env
+
+# Update these values:
+# - AWS_ACCOUNT_ID: Your AWS account ID
+# - INSTANCE_TYPE: Your GPU instance type (e.g., g5.2xlarge, g6e.xlarge)
+# - IAM_ROLE_NAME: Your IAM role for S3 access
+
 # Preview what will be deployed
-kubectl kustomize k8s/base
+kubectl kustomize k8s/overlays/production
 
-# Deploy using base configuration
-kubectl apply -k k8s/base
-
-# Or deploy using production overlay
+# Deploy to production
 kubectl apply -k k8s/overlays/production
+
+# Expected resources created:
+# - Namespace: analysis
+# - ServiceAccount: model-downloader (with IRSA)
+# - ConfigMaps: llm-config, model-download-script
+# - Deployment: llm (1 replica)
+# - Service: llm (ClusterIP - internal)
+# - Service: llm-external (LoadBalancer - external with IP whitelist)
+
+# Monitor deployment
+kubectl get pods -n analysis -w
+```
+
+**Development Deployment** (base configuration):
+
+```bash
+# Deploy using base configuration (no LoadBalancer)
+kubectl apply -k k8s/base
 
 # Check deployment status
 kubectl get pods -n analysis -w
@@ -121,26 +145,21 @@ kubectl apply -f k8s/base/llm-deployment.yaml
 
 **Note:** The base configuration uses placeholder values like `$(AWS_ACCOUNT_ID)`. These are only replaced when using Kustomize. If deploying raw manifests, you must manually edit the files first.
 
-### 5. Expose and Access the LLM API
+### 5. Access the LLM API
 
-The deployment creates an internal ClusterIP service. To access it externally, create a LoadBalancer:
+**Production (External LoadBalancer):**
+
+The production overlay automatically creates an external LoadBalancer with IP whitelisting for security.
 
 ```bash
-# Create LoadBalancer service to expose the LLM API
-kubectl expose deployment llm -n analysis \
-  --type=LoadBalancer \
-  --name=llm-external \
-  --port=8000 \
-  --target-port=8000
-
-# Wait for LoadBalancer to be provisioned
-kubectl get svc llm-external -n analysis -w
-
 # Get the LoadBalancer URL
 export LLM_URL=$(kubectl get svc llm-external -n analysis -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 echo "LLM API URL: http://${LLM_URL}:8000"
 
-# Test the API - List available models
+# Test using Python script (comprehensive tests)
+python scripts/test_llm_api.py --url http://${LLM_URL}:8000
+
+# Or test manually
 curl http://${LLM_URL}:8000/v1/models
 
 # Test chat completion
@@ -155,48 +174,94 @@ curl http://${LLM_URL}:8000/v1/chat/completions \
   }'
 ```
 
-Alternative: Use port-forwarding for local testing:
+**Important:** The LoadBalancer has IP whitelisting enabled. Update `loadBalancerSourceRanges` in [k8s/overlays/production/llm-loadbalancer.yaml](k8s/overlays/production/llm-loadbalancer.yaml) with your current IP address.
+
+**Development (Port-Forward):**
+
+Use port-forwarding for local testing without exposing the service externally:
 
 ```bash
 # Forward local port 8000 to the LLM service
-kubectl port-forward -n analysis svc/llm 8000:8000
+kubectl port-forward -n analysis svc/llm 8000:8000 &
 
-# In another terminal, test the API
+# Test with Python script
+python scripts/test_llm_api.py
+
+# Or test manually
 curl http://localhost:8000/v1/models
+
+# Kill port-forward when done
+kill %1
 ```
+
+### 6. Test the API
+
+**Using Python Test Script** (recommended):
+
+```bash
+# Install dependencies
+pip install requests
+# Or: pip install -r scripts/requirements.txt
+
+# Test via port-forward
+kubectl port-forward -n analysis svc/llm 8000:8000 &
+python scripts/test_llm_api.py
+kill %1
+
+# Test via LoadBalancer (if your IP is whitelisted)
+python scripts/test_llm_api.py --url http://<loadbalancer-url>:8000
+```
+
+The test script validates:
+
+- Health endpoint
+- Model listing
+- Chat completion
+- Text completion
 
 ### API Endpoints
 
 The vLLM service exposes an OpenAI-compatible API:
 
+- `GET /health` - Health check
 - `GET /v1/models` - List available models
 - `POST /v1/chat/completions` - Chat completion
 - `POST /v1/completions` - Text completion
-- `GET /health` - Health check
 
 ## Configuration
 
-All configuration is managed through Kustomize using a single configuration file.
+All configuration is managed through Kustomize using environment-specific configuration files.
 
-### Configuration File
+### Production Overlay Configuration
 
-Edit `k8s/config/default-config.env` to customize your deployment:
+Edit `k8s/overlays/production/config.env` for production deployment:
 
-| Variable                 | Description                      | Default                                 |
+**Key Configuration Values:**
+
+| Variable                 | Description                      | Example Value                           |
 | ------------------------ | -------------------------------- | --------------------------------------- |
 | `AWS_ACCOUNT_ID`         | Your AWS account ID              | `676164205626`                          |
 | `AWS_REGION`             | AWS region                       | `us-east-1`                             |
-| `S3_BUCKET_NAME`         | S3 bucket name for model storage | `llm-models`                            |
+| `S3_BUCKET_NAME`         | S3 path prefix for models        | `audio-models`                          |
 | `MODEL_REPO`             | HuggingFace model repository     | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
 | `MODEL_MAX_LENGTH`       | Maximum context length           | `8192`                                  |
+| `MODEL_GPU_MEMORY_UTIL`  | GPU memory utilization (0-1)     | `0.9` (21.6GB of 24GB)                  |
 | `VLLM_IMAGE`             | vLLM container image             | `vllm/vllm-openai:v0.11.0`              |
 | `LLM_MEMORY_LIMIT`       | Memory limit for LLM container   | `24Gi`                                  |
 | `LLM_MEMORY_REQUEST`     | Memory request for LLM container | `12Gi`                                  |
-| `INSTANCE_TYPE`          | EC2 instance type for GPU nodes  | `g6e.xlarge`                            |
+| `EMPTYDIR_SIZE`          | EmptyDir volume for model cache  | `40Gi` (for 32GB model)                 |
+| `INSTANCE_TYPE`          | EC2 instance type for GPU nodes  | `g5.2xlarge` or `g6e.xlarge`            |
 | `IAM_ROLE_NAME`          | IAM role name for S3 access      | `deepfake-pytorch-eks-model-downloader` |
-| `HUGGING_FACE_HUB_TOKEN` | HuggingFace API token            | `hf_your_token_here`                    |
+| `NAMESPACE`              | Kubernetes namespace             | `analysis`                              |
 
-See [`k8s/config/default-config.env.example`](k8s/config/default-config.env.example) for all available options.
+**Production-Specific Features:**
+
+- **External LoadBalancer:** Automatic NLB provisioning for external access
+- **IP Whitelisting:** Restricts access to specified IPs in `llm-loadbalancer.yaml`
+- **Node Group Targeting:** Uses nodeSelector to place pods on specific GPU node groups
+- **Optimized Download Script:** Custom S3 sync script with proper HuggingFace cache structure
+
+See [`k8s/overlays/production/config.env.example`](k8s/overlays/production/config.env.example) for all available options.
 
 ### AWS Account Setup
 
