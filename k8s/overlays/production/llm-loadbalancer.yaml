@@ -14,5 +14,5 @@ spec:
       targetPort: 8000
       protocol: TCP
   loadBalancerSourceRanges:
-    - 72.170.223.68/32  # Your current IP - restrict access to your IP only
+    - 69.74.206.198/32  # Your current IP - restrict access to your IP only
   type: LoadBalancer
