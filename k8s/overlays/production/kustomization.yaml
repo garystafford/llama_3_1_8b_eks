@@ -5,6 +5,7 @@ kind: Kustomization
 resources:
   - ../../base
   - llm-loadbalancer.yaml
+  - llm-ingress.yaml
 
 # Override namespace if needed
 namespace: analysis
@@ -263,6 +264,43 @@ replacements:
     select:
       kind: Service
       name: llm-external
+
+# Ingress configuration for HTTPS with ALB
+- source:
+    fieldPath: data.ACM_CERTIFICATE_ARN
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - metadata.annotations.[alb.ingress.kubernetes.io/certificate-arn]
+    select:
+      kind: Ingress
+      name: llm-ingress
+- source:
+    fieldPath: data.DOMAIN_NAME
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - metadata.annotations.[external-dns.alpha.kubernetes.io/hostname]
+    select:
+      kind: Ingress
+      name: llm-ingress
+  - fieldPaths:
+    - spec.rules.0.host
+    select:
+      kind: Ingress
+      name: llm-ingress
+- source:
+    fieldPath: data.LOADBALANCER_IP_WHITELIST
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - metadata.annotations.[alb.ingress.kubernetes.io/inbound-cidrs]
+    select:
+      kind: Ingress
+      name: llm-ingress
 
 # Additional labels for all resources
 labels:

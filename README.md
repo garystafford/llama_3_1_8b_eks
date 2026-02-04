@@ -199,7 +199,60 @@ curl http://${LLM_URL}:8000/v1/chat/completions \
   }'
 ```
 
-**Important:** The LoadBalancer has IP whitelisting enabled. Update `loadBalancerSourceRanges` in [k8s/overlays/production/llm-loadbalancer.yaml](k8s/overlays/production/llm-loadbalancer.yaml) with your current IP address.
+**Important:** The LoadBalancer has IP whitelisting enabled. Update `LOADBALANCER_IP_WHITELIST` in [k8s/overlays/production/config.env](k8s/overlays/production/config.env) with your current IP address.
+
+**Production (HTTPS with Custom Domain):**
+
+For production environments, you can use an AWS Application Load Balancer (ALB) with HTTPS and a custom domain:
+
+```bash
+# 1. Ensure you have an ACM certificate for your domain (*.creativitylabsai.com)
+aws acm list-certificates --region us-east-1
+
+# 2. Update config.env with your domain and certificate
+vim k8s/overlays/production/config.env
+# Add:
+# DOMAIN_NAME=analysis.creativitylabsai.com
+# ACM_CERTIFICATE_ARN=arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID
+# LOADBALANCER_IP_WHITELIST=YOUR_IP/32
+
+# 3. The Ingress is already applied if you deployed production overlay
+kubectl get ingress llm-ingress -n analysis
+
+# 4. Get the ALB endpoint
+export ALB_ENDPOINT=$(kubectl get ingress llm-ingress -n analysis -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "ALB Endpoint: $ALB_ENDPOINT"
+
+# 5. Create Route53 CNAME record
+aws route53 list-hosted-zones --query 'HostedZones[?Name==`creativitylabsai.com.`].Id' --output text
+# Use the hosted zone ID to create a CNAME record:
+aws route53 change-resource-record-sets --hosted-zone-id ZONE_ID --change-batch '{
+  "Changes": [{
+    "Action": "UPSERT",
+    "ResourceRecordSet": {
+      "Name": "analysis.creativitylabsai.com",
+      "Type": "CNAME",
+      "TTL": 300,
+      "ResourceRecords": [{"Value": "'"$ALB_ENDPOINT"'"}]
+    }
+  }]
+}'
+
+# 6. Wait for DNS propagation (1-5 minutes)
+dig analysis.creativitylabsai.com
+
+# 7. Test HTTPS endpoint
+curl https://analysis.creativitylabsai.com/v1/models
+python scripts/test_llm_api.py --url https://analysis.creativitylabsai.com
+```
+
+The Ingress configuration provides:
+
+- **HTTPS on port 443** with ACM certificate
+- **Automatic HTTP to HTTPS redirect** from port 80
+- **IP whitelisting at ALB level** for security
+- **Health checks** on `/health` endpoint
+- **TLS 1.3** encryption (ELBSecurityPolicy-TLS13-1-2-2021-06)
 
 **Development (Port-Forward):**
 
@@ -263,21 +316,25 @@ Edit `k8s/overlays/production/config.env` for production deployment:
 
 **Key Configuration Values:**
 
-| Variable                | Description                      | Example Value                           |
-| ----------------------- | -------------------------------- | --------------------------------------- |
-| `AWS_ACCOUNT_ID`        | Your AWS account ID              | `676164205626`                          |
-| `AWS_REGION`            | AWS region                       | `us-east-1`                             |
-| `S3_BUCKET_NAME`        | S3 path prefix for models        | `audio-models`                          |
-| `MODEL_REPO`            | HuggingFace model repository     | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
-| `MODEL_MAX_LENGTH`      | Maximum context length           | `8192`                                  |
-| `MODEL_GPU_MEMORY_UTIL` | GPU memory utilization (0-1)     | `0.9` (21.6GB of 24GB)                  |
-| `VLLM_IMAGE`            | vLLM container image             | `vllm/vllm-openai:v0.11.0`              |
-| `LLM_MEMORY_LIMIT`      | Memory limit for LLM container   | `24Gi`                                  |
-| `LLM_MEMORY_REQUEST`    | Memory request for LLM container | `12Gi`                                  |
-| `EMPTYDIR_SIZE`         | EmptyDir volume for model cache  | `40Gi` (for 32GB model)                 |
-| `INSTANCE_TYPE`         | EC2 instance type for GPU nodes  | `g5.2xlarge` or `g6e.xlarge`            |
-| `IAM_ROLE_NAME`         | IAM role name for S3 access      | `deepfake-pytorch-eks-model-downloader` |
-| `NAMESPACE`             | Kubernetes namespace             | `analysis`                              |
+| Variable                    | Description                      | Example Value                           |
+| --------------------------- | -------------------------------- | --------------------------------------- |
+| `AWS_ACCOUNT_ID`            | Your AWS account ID              | `676164205626`                          |
+| `AWS_REGION`                | AWS region                       | `us-east-1`                             |
+| `S3_BUCKET_NAME`            | S3 path prefix for models        | `audio-models`                          |
+| `MODEL_REPO`                | HuggingFace model repository     | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
+| `MODEL_MAX_LENGTH`          | Maximum context length           | `8192`                                  |
+| `MODEL_GPU_MEMORY_UTIL`     | GPU memory utilization (0-1)     | `0.9` (21.6GB of 24GB)                  |
+| `VLLM_IMAGE`                | vLLM container image             | `vllm/vllm-openai:v0.11.0`              |
+| `LLM_MEMORY_LIMIT`          | Memory limit for LLM container   | `24Gi`                                  |
+| `LLM_MEMORY_REQUEST`        | Memory request for LLM container | `12Gi`                                  |
+| `EMPTYDIR_SIZE`             | EmptyDir volume for model cache  | `40Gi` (for 32GB model)                 |
+| `INSTANCE_TYPE`             | EC2 instance type for GPU nodes  | `g5.2xlarge` or `g6e.xlarge`            |
+| `IAM_ROLE_NAME`             | IAM role name for S3 access      | `deepfake-pytorch-eks-model-downloader` |
+| `NAMESPACE`                 | Kubernetes namespace             | `analysis`                              |
+| `WORKLOAD_LABEL`            | Node selector workload label     | `personaplex-server`                    |
+| `LOADBALANCER_IP_WHITELIST` | IP CIDR for access control       | `69.74.206.198/32`                      |
+| `DOMAIN_NAME`               | Custom domain for HTTPS access   | `analysis.creativitylabsai.com`         |
+| `ACM_CERTIFICATE_ARN`       | ACM certificate ARN for HTTPS    | `arn:aws:acm:us-east-1:...`             |
 
 **Production-Specific Features:**
 
