@@ -27,118 +27,42 @@ metadata:
   name: model-download-script
   namespace: analysis
 data:
-  download-stt.sh: |
-    #!/bin/bash
-    set -e
-
-    DOWNLOAD_DIR="/models/.cache/huggingface/hub"
-    MARKER_FILE="/models/.cache/.stt-download-complete"
-    S3_BUCKET="s3://$(AWS_ACCOUNT_ID)-sagemaker-$(AWS_REGION)/$(S3_BUCKET_NAME)/audio-models/"
-
-    mkdir -p "${DOWNLOAD_DIR}"
-
-    # Check if already downloaded
-    if [ -f "${MARKER_FILE}" ]; then
-      echo "STT models already cached, skipping download"
-      ls -lh "${DOWNLOAD_DIR}/" 2>/dev/null || true
-      exit 0
-    fi
-
-    echo "Downloading STT models from S3..."
-    echo "Source: ${S3_BUCKET}/stt/"
-    echo "Destination: ${DOWNLOAD_DIR}/"
-
-    # Download STT model files
-    aws s3 sync "${S3_BUCKET}/stt/" "${DOWNLOAD_DIR}/models--kyutai--stt-1b-en_fr-candle/" \
-      --no-progress \
-      --only-show-errors
-
-    # Verify download
-    if [ -d "${DOWNLOAD_DIR}/models--kyutai--stt-1b-en_fr-candle" ]; then
-      echo "STT model download complete"
-      touch "${MARKER_FILE}"
-      ls -lh "${DOWNLOAD_DIR}/models--kyutai--stt-1b-en_fr-candle/" 2>/dev/null || true
-    else
-      echo "ERROR: STT model download failed"
-      exit 1
-    fi
-
-  download-tts.sh: |
-    #!/bin/bash
-    set -e
-
-    DOWNLOAD_DIR="/models/.cache/huggingface/hub"
-    MARKER_FILE="/models/.cache/.tts-download-complete"
-    S3_BUCKET="s3://$(AWS_ACCOUNT_ID)-sagemaker-$(AWS_REGION)/$(S3_BUCKET_NAME)"
-
-    mkdir -p "${DOWNLOAD_DIR}"
-
-    # Check if already downloaded
-    if [ -f "${MARKER_FILE}" ]; then
-      echo "TTS models already cached, skipping download"
-      ls -lh "${DOWNLOAD_DIR}/" 2>/dev/null || true
-      exit 0
-    fi
-
-    echo "Downloading TTS models from S3..."
-    echo "Source: ${S3_BUCKET}/tts/ and ${S3_BUCKET}/voices/"
-    echo "Destination: ${DOWNLOAD_DIR}/"
-
-    # Download TTS model files
-    aws s3 sync "${S3_BUCKET}/tts/" "${DOWNLOAD_DIR}/models--kyutai--tts-1.6b-en_fr/" \
-      --no-progress \
-      --only-show-errors
-
-    # Download TTS voice files
-    aws s3 sync "${S3_BUCKET}/voices/" "${DOWNLOAD_DIR}/models--kyutai--tts-voices/" \
-      --no-progress \
-      --only-show-errors
-
-    # Verify download
-    if [ -d "${DOWNLOAD_DIR}/models--kyutai--tts-1.6b-en_fr" ]; then
-      echo "TTS model download complete"
-      touch "${MARKER_FILE}"
-      ls -lh "${DOWNLOAD_DIR}/models--kyutai--tts-1.6b-en_fr/" 2>/dev/null || true
-      ls -lh "${DOWNLOAD_DIR}/models--kyutai--tts-voices/" 2>/dev/null | head -5 || true
-    else
-      echo "ERROR: TTS model download failed"
-      exit 1
-    fi
-
   download-llm.sh: |
     #!/bin/bash
     set -e
 
+    # Configuration from environment variables
     DOWNLOAD_DIR="/models/.cache/huggingface/hub"
     MARKER_FILE="/models/.cache/.llm-download-complete"
-    S3_BUCKET="s3://$(AWS_ACCOUNT_ID)-sagemaker-$(AWS_REGION)/$(S3_BUCKET_NAME)"
-    MODEL_DIR="models--$(echo $(MODEL_REPO) | tr '/' '-')"
+    S3_BUCKET="s3://${AWS_ACCOUNT_ID}-sagemaker-${AWS_REGION}/${S3_BUCKET_NAME}"
+    MODEL_DIR="models--${MODEL_REPO_DASHED}"
 
-    mkdir -p "${DOWNLOAD_DIR}"
+    mkdir -p "${DOWNLOAD_DIR}/${MODEL_DIR}"
 
     # Check if already downloaded
     if [ -f "${MARKER_FILE}" ]; then
       echo "LLM models already cached, skipping download"
-      ls -lh "${DOWNLOAD_DIR}/" 2>/dev/null || true
+      ls -lh "${DOWNLOAD_DIR}/${MODEL_DIR}/" 2>/dev/null | head -5 || true
       exit 0
     fi
 
     echo "Downloading LLM models from S3..."
     echo "Source: ${S3_BUCKET}/llm/"
-    echo "Destination: ${DOWNLOAD_DIR}/"
-    echo "Model: $(MODEL_NAME)"
+    echo "Destination: ${DOWNLOAD_DIR}/${MODEL_DIR}/"
+    echo "Model: ${MODEL_NAME}"
 
     # Download LLM model files
     aws s3 sync "${S3_BUCKET}/llm/" "${DOWNLOAD_DIR}/${MODEL_DIR}/" \
+      --exclude ".cache/*" \
       --no-progress \
       --only-show-errors
 
     # Verify download
-    if [ -d "${DOWNLOAD_DIR}/${MODEL_DIR}" ]; then
+    if [ -f "${DOWNLOAD_DIR}/${MODEL_DIR}/config.json" ]; then
       echo "LLM model download complete"
       touch "${MARKER_FILE}"
-      ls -lh "${DOWNLOAD_DIR}/${MODEL_DIR}/" 2>/dev/null || true
+      ls -lh "${DOWNLOAD_DIR}/${MODEL_DIR}/" 2>/dev/null | head -10 || true
     else
-      echo "ERROR: LLM model download failed"
+      echo "ERROR: LLM model download failed - config.json not found"
       exit 1
     fi

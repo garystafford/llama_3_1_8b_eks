@@ -178,6 +178,92 @@ replacements:
       kind: ServiceAccount
       name: model-downloader
 
+# Init container environment variables
+- source:
+    fieldPath: data.AWS_ACCOUNT_ID
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.initContainers.[name=model-sync].env.[name=AWS_ACCOUNT_ID].value
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.AWS_REGION
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.initContainers.[name=model-sync].env.[name=AWS_REGION].value
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.S3_BUCKET_NAME
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.initContainers.[name=model-sync].env.[name=S3_BUCKET_NAME].value
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_NAME
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.initContainers.[name=model-sync].env.[name=MODEL_NAME].value
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_REPO
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.initContainers.[name=model-sync].env.[name=MODEL_REPO].value
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_REPO_DASHED
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.initContainers.[name=model-sync].env.[name=MODEL_REPO_DASHED].value
+    select:
+      kind: Deployment
+      name: llm
+
+# Workload label for node selection
+- source:
+    fieldPath: data.WORKLOAD_LABEL
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.nodeSelector.workload
+    select:
+      kind: Deployment
+      name: llm
+
+# LoadBalancer IP whitelist
+- source:
+    fieldPath: data.LOADBALANCER_IP_WHITELIST
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.loadBalancerSourceRanges.0
+    select:
+      kind: Service
+      name: llm-external
+
 # Additional labels for all resources
 labels:
 - includeSelectors: true
@@ -185,16 +271,3 @@ labels:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/part-of: llm-deployment
     environment: production
-
-# Production-specific patches
-patches:
-  # Override download script with fixed version
-  - path: download-llm-fixed.yaml
-  # Update nodeSelector to target personaplex-gpu-server node group
-  - target:
-      kind: Deployment
-      name: llm
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/nodeSelector/workload
-        value: personaplex-server
