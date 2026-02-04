@@ -12,15 +12,181 @@ resources:
 commonLabels:
   environment: production
 
-# Override ConfigMap with production values (if config.env exists)
-# Uncomment if you want production-specific overrides
-# configMapGenerator:
-#   - name: llm-config
-#     envs:
-#       - config.env
-#     behavior: merge
-#     options:
-#       disableNameSuffixHash: true
+# Generate ConfigMap with production values
+configMapGenerator:
+  - name: llm-config
+    envs:
+      - config.env
+    options:
+      disableNameSuffixHash: true
+
+# Replacements to inject config values into manifests
+replacements:
+- source:
+    fieldPath: data.AWS_REGION
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.initContainers.[name=model-sync].env.[name=AWS_DEFAULT_REGION].value
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.VLLM_IMAGE
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].image
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_REPO_DASHED
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].args.0
+    options:
+      delimiter: models--
+      index: 1
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_REPO
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].args.1
+    options:
+      delimiter: =
+      index: 1
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_MAX_LENGTH
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].args.2
+    options:
+      delimiter: =
+      index: 1
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.MODEL_GPU_MEMORY_UTIL
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].args.4
+    options:
+      delimiter: =
+      index: 1
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.LLM_MEMORY_LIMIT
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].resources.limits.memory
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.LLM_MEMORY_REQUEST
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].resources.requests.memory
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.LLM_CPU_LIMIT
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].resources.limits.cpu
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.LLM_CPU_REQUEST
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=llm].resources.requests.cpu
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.EMPTYDIR_SIZE
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.volumes.[name=model-cache].emptyDir.sizeLimit
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.INSTANCE_TYPE
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - spec.template.spec.nodeSelector.[node.kubernetes.io/instance-type]
+    select:
+      kind: Deployment
+      name: llm
+- source:
+    fieldPath: data.AWS_ACCOUNT_ID
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - metadata.annotations.[eks.amazonaws.com/role-arn]
+    options:
+      delimiter: ':'
+      index: 4
+    select:
+      kind: ServiceAccount
+      name: model-downloader
+- source:
+    fieldPath: data.IAM_ROLE_NAME
+    kind: ConfigMap
+    name: llm-config
+  targets:
+  - fieldPaths:
+    - metadata.annotations.[eks.amazonaws.com/role-arn]
+    options:
+      delimiter: /
+      index: 1
+    select:
+      kind: ServiceAccount
+      name: model-downloader
+
+# Additional labels for all resources
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/part-of: llm-deployment
 
 # Production-specific patches
 # Uncomment to apply resource adjustments
