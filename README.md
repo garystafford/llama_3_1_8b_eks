@@ -57,6 +57,13 @@ python3 --version
 
 Before deploying, you need to upload the Meta-Llama-3.1-8B-Instruct model to S3:
 
+> **Warning: Model Size and Timing**
+> - Meta-Llama-3.1-8B-Instruct is **~32GB** (not 16GB)
+> - HuggingFace download: 15-30 minutes (depends on bandwidth)
+> - S3 upload: 10-20 minutes (depends on bandwidth and region)
+> - Ensure your `EMPTYDIR_SIZE` in config.env is at least **40Gi** (model size + buffer)
+> - Total process can take 30-60 minutes
+
 ```bash
 # Set up Python environment for model upload script
 python -m venv .venv
@@ -68,7 +75,7 @@ pip install -r scripts/requirements.txt
 export HUGGING_FACE_HUB_TOKEN=<your_hf_token>
 export S3_BUCKET=<your_s3_bucket_name>
 
-# Upload model to S3 (~16GB download + upload)
+# Upload model to S3 (~32GB download + upload)
 ./scripts/upload-models-to-s3.sh all
 ```
 
@@ -119,6 +126,23 @@ kubectl apply -k k8s/overlays/production
 # Monitor deployment
 kubectl get pods -n analysis -w
 ```
+
+> **Deployment Timing Expectations**
+>
+> The pod initialization involves multiple stages:
+> 1. **Pending** (0-30s): Waiting for GPU node scheduling
+> 2. **Init:0/1** (2-5 min): Downloading 32GB model from S3 to EmptyDir volume
+> 3. **PodInitializing** (10-30s): Init container completing
+> 4. **Running** (1-3 min): vLLM loading 32GB model into GPU memory
+> 5. **Ready** (60s): Readiness probe waiting for API to be fully responsive
+>
+> **Total time from apply to ready: 5-10 minutes**
+>
+> Monitor init container logs to see S3 download progress:
+> ```bash
+> POD_NAME=$(kubectl get pods -n analysis -l app=llm -o jsonpath='{.items[0].metadata.name}')
+> kubectl logs -n analysis $POD_NAME -c model-sync -f
+> ```
 
 **Development Deployment** (base configuration):
 
@@ -239,21 +263,21 @@ Edit `k8s/overlays/production/config.env` for production deployment:
 
 **Key Configuration Values:**
 
-| Variable                 | Description                      | Example Value                           |
-| ------------------------ | -------------------------------- | --------------------------------------- |
-| `AWS_ACCOUNT_ID`         | Your AWS account ID              | `676164205626`                          |
-| `AWS_REGION`             | AWS region                       | `us-east-1`                             |
-| `S3_BUCKET_NAME`         | S3 path prefix for models        | `audio-models`                          |
-| `MODEL_REPO`             | HuggingFace model repository     | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
-| `MODEL_MAX_LENGTH`       | Maximum context length           | `8192`                                  |
-| `MODEL_GPU_MEMORY_UTIL`  | GPU memory utilization (0-1)     | `0.9` (21.6GB of 24GB)                  |
-| `VLLM_IMAGE`             | vLLM container image             | `vllm/vllm-openai:v0.11.0`              |
-| `LLM_MEMORY_LIMIT`       | Memory limit for LLM container   | `24Gi`                                  |
-| `LLM_MEMORY_REQUEST`     | Memory request for LLM container | `12Gi`                                  |
-| `EMPTYDIR_SIZE`          | EmptyDir volume for model cache  | `40Gi` (for 32GB model)                 |
-| `INSTANCE_TYPE`          | EC2 instance type for GPU nodes  | `g5.2xlarge` or `g6e.xlarge`            |
-| `IAM_ROLE_NAME`          | IAM role name for S3 access      | `deepfake-pytorch-eks-model-downloader` |
-| `NAMESPACE`              | Kubernetes namespace             | `analysis`                              |
+| Variable                | Description                      | Example Value                           |
+| ----------------------- | -------------------------------- | --------------------------------------- |
+| `AWS_ACCOUNT_ID`        | Your AWS account ID              | `676164205626`                          |
+| `AWS_REGION`            | AWS region                       | `us-east-1`                             |
+| `S3_BUCKET_NAME`        | S3 path prefix for models        | `audio-models`                          |
+| `MODEL_REPO`            | HuggingFace model repository     | `meta-llama/Meta-Llama-3.1-8B-Instruct` |
+| `MODEL_MAX_LENGTH`      | Maximum context length           | `8192`                                  |
+| `MODEL_GPU_MEMORY_UTIL` | GPU memory utilization (0-1)     | `0.9` (21.6GB of 24GB)                  |
+| `VLLM_IMAGE`            | vLLM container image             | `vllm/vllm-openai:v0.11.0`              |
+| `LLM_MEMORY_LIMIT`      | Memory limit for LLM container   | `24Gi`                                  |
+| `LLM_MEMORY_REQUEST`    | Memory request for LLM container | `12Gi`                                  |
+| `EMPTYDIR_SIZE`         | EmptyDir volume for model cache  | `40Gi` (for 32GB model)                 |
+| `INSTANCE_TYPE`         | EC2 instance type for GPU nodes  | `g5.2xlarge` or `g6e.xlarge`            |
+| `IAM_ROLE_NAME`         | IAM role name for S3 access      | `deepfake-pytorch-eks-model-downloader` |
+| `NAMESPACE`             | Kubernetes namespace             | `analysis`                              |
 
 **Production-Specific Features:**
 
