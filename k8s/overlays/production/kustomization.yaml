@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Reference base configuration
+resources:
+  - ../../base
+
+# Override namespace if needed
+# namespace: unmute-prod
+
+# Production-specific labels
+commonLabels:
+  environment: production
+
+# Override ConfigMap with production values (if config.env exists)
+# Uncomment if you want production-specific overrides
+# configMapGenerator:
+#   - name: llm-config
+#     envs:
+#       - config.env
+#     behavior: merge
+#     options:
+#       disableNameSuffixHash: true
+
+# Production-specific patches
+# Uncomment to apply resource adjustments
+# patchesStrategicMerge:
+#   - patches/llm-resources.yaml
+
+# Example: Increase replicas for production
+# patches:
+#   - target:
+#       kind: Deployment
+#       name: llm
+#     patch: |-
+#       - op: replace
+#         path: /spec/replicas
+#         value: 2

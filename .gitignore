@@ -1,0 +1,34 @@
+*.egg-info
+*.pyc
+.DS_Store
+
+debug/
+recordings/
+.venv/
+# only ignore voices/ in the root directory
+/voices/
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# Kustomize config files with secrets (keep .example files)
+k8s/config/*.env
+!k8s/config/*.env.example
+k8s/overlays/*/config.env
+!k8s/overlays/*/config.env.example
+k8s/overlays/*/patches/*.yaml
+!k8s/overlays/*/patches/*.yaml.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Traefik/HTTPS
+certs/
+
+volumes/
+CLAUDE.md
+.claude/settings.local.json

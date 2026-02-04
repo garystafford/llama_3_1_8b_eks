@@ -1,0 +1,20 @@
+# Example: Production-specific resource adjustments
+# Copy this to llm-resources.yaml and customize as needed
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm
+spec:
+  replicas: 2  # Run 2 replicas in production
+  template:
+    spec:
+      containers:
+        - name: llm
+          resources:
+            limits:
+              memory: "32Gi"  # More memory for production
+              cpu: "2"        # More CPU for production
+            requests:
+              memory: "16Gi"
+              cpu: "1"

@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm
+  namespace: unmute
+  labels:
+    app: llm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm
+  template:
+    metadata:
+      labels:
+        app: llm
+    spec:
+      serviceAccountName: model-downloader
+
+      # Init container downloads models from S3 before main container starts
+      initContainers:
+        - name: model-sync
+          image: amazon/aws-cli:latest
+          imagePullPolicy: Always
+          env:
+            - name: AWS_DEFAULT_REGION
+              value: "$(AWS_REGION)"
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+            - name: download-script
+              mountPath: /scripts
+          command: ["/bin/bash", "/scripts/download-llm.sh"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+      containers:
+        - name: llm
+          image: $(VLLM_IMAGE)
+          args:
+            - "--model=/models/.cache/huggingface/hub/models--$(MODEL_REPO_DASHED)"
+            - "--served-model-name=$(MODEL_REPO)"
+            - "--max-model-len=$(MODEL_MAX_LENGTH)"
+            - "--dtype=bfloat16"
+            - "--gpu-memory-utilization=$(MODEL_GPU_MEMORY_UTIL)"
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          env:
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: unmute-secrets
+                  key: HUGGING_FACE_HUB_TOKEN
+            # Point HuggingFace cache to pre-downloaded models
+            - name: HF_HOME
+              value: /models/.cache/huggingface
+            - name: HF_HUB_CACHE
+              value: /models/.cache/huggingface/hub
+          # GPU time-slicing: 3 pods share 1 physical GPU (configured via NVIDIA device plugin)
+          # CPU reduced to fit all 3 GPU pods on single g6e.xlarge node (4 vCPUs total)
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+              memory: "$(LLM_MEMORY_LIMIT)"
+              cpu: "$(LLM_CPU_LIMIT)"
+            requests:
+              nvidia.com/gpu: "1"
+              memory: "$(LLM_MEMORY_REQUEST)"
+              cpu: "$(LLM_CPU_REQUEST)"
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+          # Reduced initial delay since models are pre-downloaded from S3
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v1/models
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: $(EMPTYDIR_SIZE)
+        - name: download-script
+          configMap:
+            name: model-download-script
+            defaultMode: 0755
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      nodeSelector:
+        node.kubernetes.io/instance-type: $(INSTANCE_TYPE)
+        workload: unmute
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm
+  namespace: unmute
+spec:
+  selector:
+    app: llm
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP

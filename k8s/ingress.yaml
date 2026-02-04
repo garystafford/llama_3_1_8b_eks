@@ -1,0 +1,96 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unmute-ingress
+  namespace: unmute
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/inbound-cidrs: ${MY_IP_CIDR} # replace with your IP/32, e.g., 203.0.113.10/32
+    # WebSocket support
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=3600
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /stt
+            pathType: Prefix
+            backend:
+              service:
+                name: stt
+                port:
+                  number: 8080
+          - path: /tts
+            pathType: Prefix
+            backend:
+              service:
+                name: tts
+                port:
+                  number: 8080
+          - path: /llm
+            pathType: Prefix
+            backend:
+              service:
+                name: llm
+                port:
+                  number: 8000
+#
+# Alternative: Direct LoadBalancer services (simpler)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stt-external
+  namespace: unmute
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  selector:
+    app: stt
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  loadBalancerSourceRanges:
+    - ${MY_IP_CIDR} # replace with your IP/32, e.g., 203.0.113.10/32
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tts-external
+  namespace: unmute
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  selector:
+    app: tts
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  loadBalancerSourceRanges:
+    - ${MY_IP_CIDR} # replace with your IP/32
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-external
+  namespace: unmute
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  selector:
+    app: llm
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+  loadBalancerSourceRanges:
+    - ${MY_IP_CIDR} # replace with your IP/32
+  type: LoadBalancer

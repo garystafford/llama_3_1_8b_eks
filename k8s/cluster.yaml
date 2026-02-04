@@ -1,0 +1,94 @@
+# EKS Cluster Configuration for eksctl
+# Recreate with: eksctl create cluster -f cluster.yaml
+#
+# This captures the base EKS cluster with GPU node group for the Unmute application.
+# After cluster creation, apply the Kubernetes manifests in this directory.
+
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: deepfake-pytorch-eks
+  region: us-east-1
+  version: "1.31"  # Use stable version; upgrade after creation if needed
+
+# Use existing VPC (comment out to create new VPC)
+vpc:
+  id: vpc-0b917424d7abc81fa
+  subnets:
+    public:
+      us-east-1a:
+        id: subnet-00a7cfe4591440959
+      us-east-1b:
+        id: subnet-0a1e850058892a7d2
+      us-east-1c:
+        id: subnet-0ee0b67c74676c38e
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+# IAM configuration
+iam:
+  withOIDC: true  # Required for IRSA (IAM Roles for Service Accounts)
+
+# GPU Node Group for ML models (STT, TTS, LLM)
+managedNodeGroups:
+  - name: unmute-gpu
+    instanceType: g6e.xlarge          # NVIDIA L40S GPU
+    amiFamily: AmazonLinux2023        # AL2023 with NVIDIA drivers
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 3                        # Allow scaling if needed
+    volumeSize: 100                   # GB - for model storage
+    volumeType: gp3
+
+    # GPU node labels for pod scheduling
+    labels:
+      node-type: gpu
+      nvidia.com/gpu.present: "true"
+
+    # Optional: Taint to ensure only GPU workloads schedule here
+    # taints:
+    #   - key: nvidia.com/gpu
+    #     value: "true"
+    #     effect: NoSchedule
+
+    # SSH access (optional - for debugging)
+    # ssh:
+    #   allow: true
+    #   publicKeyPath: ~/.ssh/id_rsa.pub
+
+# CloudWatch logging
+cloudWatch:
+  clusterLogging:
+    enableTypes:
+      - api
+      - audit
+      - authenticator
+      - controllerManager
+      - scheduler
+
+# Addons - EKS will install latest compatible versions
+addons:
+  - name: vpc-cni
+    attachPolicyARNs:
+      - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+  - name: coredns
+  - name: kube-proxy
+  - name: eks-pod-identity-agent
+
+---
+# Post-creation steps:
+# 1. Install NVIDIA device plugin:
+#    kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.1/nvidia-device-plugin.yml
+#
+# 2. Apply GPU time-slicing ConfigMap (for sharing GPU across pods):
+#    kubectl apply -f gpu-time-slicing.yaml
+#
+# 3. Deploy application manifests:
+#    kubectl apply -f stt-deployment.yaml
+#    kubectl apply -f tts-deployment.yaml
+#    kubectl apply -f llm-deployment.yaml
+#    kubectl apply -f backend-deployment.yaml
+#    kubectl apply -f frontend-deployment.yaml
+#    kubectl apply -f nginx-proxy.yaml
