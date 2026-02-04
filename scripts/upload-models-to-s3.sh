@@ -28,7 +28,7 @@ HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}/hub"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 # Minimum sizes (in KB) to consider a model "fully downloaded"
-MIN_SIZE_LLM=1000000   # ~1GB
+MIN_SIZE_LLM=1000000 # ~1GB
 
 # Colors for output
 RED='\033[0;31m'
