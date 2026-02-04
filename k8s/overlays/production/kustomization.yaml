@@ -4,6 +4,7 @@ kind: Kustomization
 # Reference base configuration
 resources:
   - ../../base
+  - llm-loadbalancer.yaml
 
 # Override namespace if needed
 # namespace: analysis-prod
