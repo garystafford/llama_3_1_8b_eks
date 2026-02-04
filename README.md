@@ -61,6 +61,7 @@ Before deploying, you need to upload the Meta-Llama-3.1-8B-Instruct model to S3:
 # Set up Python environment for model upload script
 python -m venv .venv
 source .venv/bin/activate
+pip install pip -Uq
 pip install -r scripts/requirements.txt
 
 # Set your HuggingFace token (required - you must accept Llama license on HuggingFace first)

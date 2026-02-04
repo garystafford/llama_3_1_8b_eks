@@ -9,10 +9,6 @@ resources:
 # Override namespace if needed
 namespace: analysis
 
-# Production-specific labels
-commonLabels:
-  environment: production
-
 # Generate ConfigMap with production values
 configMapGenerator:
   - name: llm-config
@@ -188,14 +184,13 @@ labels:
   pairs:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/part-of: llm-deployment
+    environment: production
 
 # Production-specific patches
-# Override download script with fixed version
-patchesStrategicMerge:
-  - download-llm-fixed.yaml
-
-# Update nodeSelector to target personaplex-gpu-server node group
 patches:
+  # Override download script with fixed version
+  - path: download-llm-fixed.yaml
+  # Update nodeSelector to target personaplex-gpu-server node group
   - target:
       kind: Deployment
       name: llm
