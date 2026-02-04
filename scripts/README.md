@@ -32,7 +32,7 @@ Downloads Meta-Llama-3.1-8B-Instruct model weights from HuggingFace Hub and uplo
 
 - AWS CLI configured with appropriate credentials
 - HuggingFace token with access to gated models (Llama license must be accepted on HuggingFace)
-- ~20GB free disk space for temporary downloads
+- ~40GB free disk space for temporary downloads
 - Python virtual environment with `huggingface_hub` installed (see Setup above)
 
 #### Usage
@@ -42,7 +42,7 @@ Downloads Meta-Llama-3.1-8B-Instruct model weights from HuggingFace Hub and uplo
 export HUGGING_FACE_HUB_TOKEN=<your_hf_token>
 export S3_BUCKET=<your_s3_bucket_name>
 
-# Upload LLM model (~16GB)
+# Upload LLM model (~32GB)
 ./scripts/upload-models-to-s3.sh all
 
 # Or explicitly specify llm
@@ -64,4 +64,4 @@ export S3_BUCKET=<your_s3_bucket_name>
 
 | Model                                   | S3 Path                      | Size  |
 | --------------------------------------- | ---------------------------- | ----- |
-| `meta-llama/Meta-Llama-3.1-8B-Instruct` | `s3://.../llm-models/llm/`   | ~16GB |
+| `meta-llama/Meta-Llama-3.1-8B-Instruct` | `s3://.../llm-models/llm/`   | ~32GB |

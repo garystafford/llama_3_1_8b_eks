@@ -4,7 +4,7 @@ A production-ready Amazon EKS deployment of Meta-Llama-3.1-8B-Instruct with opti
 
 This project deploys a single LLM service with an OpenAI-compatible API endpoint for text generation and chat completions.
 
-> **⚠️ Before You Begin**: This repository contains hardcoded references to a specific AWS account, VPC, subnets, and S3 bucket. You **must** update these values to match your own AWS environment before deploying. See the [Configuration](#configuration) section for details.
+> **⚠️ Before You Begin**: All AWS-specific configuration values (account ID, region, S3 bucket, domain, certificates) are managed through `k8s/overlays/production/config.env`. Update this file with your AWS environment details before deploying. The config file is git-ignored for security. See the [Configuration](#configuration) section for details.
 
 ## What is this project?
 
@@ -13,20 +13,22 @@ This repository provides a production-grade Amazon EKS deployment for Meta-Llama
 - **Amazon EKS cluster** for scalable GPU workloads
 - **S3-based model caching** with IRSA for secure, keyless access
 - **vLLM inference engine** with OpenAI-compatible API
-- **Fast startup times** (3-5 min) using pre-cached models from S3
-- **GPU optimization** for g6e.xlarge instances (NVIDIA L40S, 48GB VRAM)
-- **LoadBalancer service** for direct API access
+- **Fast startup times** (5-10 min) using pre-cached models from S3
+- **GPU optimization** for g5.2xlarge instances (NVIDIA A10G, 24GB VRAM)
+- **HTTPS with custom domain** using AWS ALB and ACM certificates
+- **IP whitelisting** for secure external access
 
 ### Key Features
 
 | Feature              | Description                                                 |
 | -------------------- | ----------------------------------------------------------- |
-| **Model**            | Meta-Llama-3.1-8B-Instruct (16GB model size)                |
+| **Model**            | Meta-Llama-3.1-8B-Instruct (32GB model size)                |
 | **Inference Engine** | vLLM v0.11.0 with OpenAI-compatible API                     |
-| **Model Loading**    | S3 + init containers (3-5 min startup)                      |
-| **GPU**              | g6e.xlarge (NVIDIA L40S, 48GB VRAM)                         |
+| **Model Loading**    | S3 + init containers (5-10 min startup)                     |
+| **GPU**              | g5.2xlarge (NVIDIA A10G, 24GB VRAM)                         |
 | **Context Length**   | 8192 tokens (configurable)                                  |
-| **Access Control**   | LoadBalancer with source IP restrictions                    |
+| **HTTPS**            | ALB Ingress with ACM certificate and automatic SSL redirect |
+| **Access Control**   | IP whitelisting at ALB and NLB levels                       |
 | **IAM**              | IRSA (IAM Roles for Service Accounts) for keyless S3 access |
 
 ## Quick Start
