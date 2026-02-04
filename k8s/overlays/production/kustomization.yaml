@@ -194,7 +194,7 @@ labels:
 patchesStrategicMerge:
   - download-llm-fixed.yaml
 
-# Update nodeSelector to match actual node labels
+# Update nodeSelector to target personaplex-gpu-server node group
 patches:
   - target:
       kind: Deployment
@@ -203,43 +203,3 @@ patches:
       - op: replace
         path: /spec/template/spec/nodeSelector/workload
         value: personaplex-server
-      - op: add
-        path: /spec/template/spec/initContainers/0/env/-
-        value:
-          name: AWS_ACCOUNT_ID
-          valueFrom:
-            configMapKeyRef:
-              name: llm-config
-              key: AWS_ACCOUNT_ID
-      - op: add
-        path: /spec/template/spec/initContainers/0/env/-
-        value:
-          name: AWS_REGION
-          valueFrom:
-            configMapKeyRef:
-              name: llm-config
-              key: AWS_REGION
-      - op: add
-        path: /spec/template/spec/initContainers/0/env/-
-        value:
-          name: S3_BUCKET_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: llm-config
-              key: S3_BUCKET_NAME
-      - op: add
-        path: /spec/template/spec/initContainers/0/env/-
-        value:
-          name: MODEL_REPO
-          valueFrom:
-            configMapKeyRef:
-              name: llm-config
-              key: MODEL_REPO
-      - op: add
-        path: /spec/template/spec/initContainers/0/env/-
-        value:
-          name: MODEL_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: llm-config
-              key: MODEL_NAME
