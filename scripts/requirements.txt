@@ -1,2 +1,3 @@
 huggingface_hub
 requests
+urllib3<2  # Pin to v1.x for macOS LibreSSL compatibility
