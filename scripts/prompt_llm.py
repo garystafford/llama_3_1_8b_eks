@@ -43,7 +43,8 @@ import argparse
 import sys
 import requests
 import json
-from typing import Optional, List
+import time
+from typing import Optional, List, Tuple
 
 
 def prompt_completion(
@@ -66,7 +67,7 @@ def prompt_completion(
     min_tokens: int = 0,
     use_beam_search: bool = False,
     length_penalty: float = 1.0,
-) -> dict:
+) -> Tuple[dict, float]:
     """
     Send a text completion request with full parameter control.
 
@@ -127,14 +128,16 @@ def prompt_completion(
         payload["length_penalty"] = length_penalty
 
     try:
+        start_time = time.time()
         response = requests.post(
             f"{base_url}/v1/completions",
             headers={"Content-Type": "application/json"},
             json=payload,
             timeout=60,
         )
+        elapsed_time = time.time() - start_time
         response.raise_for_status()
-        return response.json()
+        return response.json(), elapsed_time
     except requests.exceptions.RequestException as e:
         print(f"❌ Error: {e}")
         sys.exit(1)
@@ -156,7 +159,7 @@ def prompt_chat(
     stream: bool = False,
     n: int = 1,
     logprobs: Optional[int] = None,
-) -> dict:
+) -> Tuple[dict, float]:
     """
     Send a chat completion request with full parameter control.
 
@@ -192,20 +195,24 @@ def prompt_chat(
         payload["logprobs"] = logprobs
 
     try:
+        start_time = time.time()
         response = requests.post(
             f"{base_url}/v1/chat/completions",
             headers={"Content-Type": "application/json"},
             json=payload,
             timeout=60,
         )
+        elapsed_time = time.time() - start_time
         response.raise_for_status()
-        return response.json()
+        return response.json(), elapsed_time
     except requests.exceptions.RequestException as e:
         print(f"❌ Error: {e}")
         sys.exit(1)
 
 
-def print_response(response: dict, mode: str, show_metadata: bool = False):
+def print_response(
+    response: dict, mode: str, elapsed_time: float, show_metadata: bool = False
+):
     """Pretty print the response."""
     if mode == "chat":
         if "choices" in response and len(response["choices"]) > 0:
@@ -242,12 +249,23 @@ def print_response(response: dict, mode: str, show_metadata: bool = False):
         else:
             print("❌ No response generated")
 
-    if show_metadata and "usage" in response:
+    if show_metadata:
         print(f"\n{'─'*60}")
-        print("Usage Statistics:")
-        print(f"  Prompt tokens: {response['usage'].get('prompt_tokens', 'N/A')}")
-        print(f"  Completion tokens: {response['usage'].get('completion_tokens', 'N/A')}")
-        print(f"  Total tokens: {response['usage'].get('total_tokens', 'N/A')}")
+        print("Performance Metrics:")
+        print(f"  Request latency: {elapsed_time:.3f}s")
+
+        if "usage" in response:
+            completion_tokens = response['usage'].get('completion_tokens', 0)
+            if completion_tokens > 0 and elapsed_time > 0:
+                tokens_per_sec = completion_tokens / elapsed_time
+                print(f"  Tokens per second: {tokens_per_sec:.2f}")
+
+        if "usage" in response:
+            print(f"\n{'─'*60}")
+            print("Usage Statistics:")
+            print(f"  Prompt tokens: {response['usage'].get('prompt_tokens', 'N/A')}")
+            print(f"  Completion tokens: {response['usage'].get('completion_tokens', 'N/A')}")
+            print(f"  Total tokens: {response['usage'].get('total_tokens', 'N/A')}")
 
 
 def main():
@@ -459,7 +477,7 @@ Examples:
             print(f"{'─'*60}")
             print("Assistant:")
 
-        response = prompt_chat(
+        response, elapsed_time = prompt_chat(
             base_url=args.url,
             model_name=args.model,
             system_message=args.system,
@@ -482,7 +500,7 @@ Examples:
             print(f"{'─'*60}")
             print("Response:")
 
-        response = prompt_completion(
+        response, elapsed_time = prompt_completion(
             base_url=args.url,
             model_name=args.model,
             prompt=args.prompt,
@@ -506,9 +524,19 @@ Examples:
 
     # Display response
     if args.json:
-        print(json.dumps(response, indent=2))
+        # Add timing metadata to JSON output
+        response_with_timing = response.copy()
+        response_with_timing["_timing"] = {
+            "request_latency_seconds": round(elapsed_time, 3),
+            "tokens_per_second": (
+                round(response.get("usage", {}).get("completion_tokens", 0) / elapsed_time, 2)
+                if elapsed_time > 0 and response.get("usage", {}).get("completion_tokens", 0) > 0
+                else None
+            )
+        }
+        print(json.dumps(response_with_timing, indent=2))
     else:
-        print_response(response, args.mode, args.show_metadata)
+        print_response(response, args.mode, elapsed_time, args.show_metadata)
         print(f"\n{'='*60}\n")
 
 

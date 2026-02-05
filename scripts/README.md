@@ -102,7 +102,8 @@ Interactive script to prompt the LLM with full control over all inference parame
 - **Full parameter control**: All vLLM inference parameters exposed
 - **Multiple completions**: Generate and compare multiple outputs
 - **Metadata display**: View token usage and generation statistics
-- **JSON output**: Export raw responses for analysis
+- **Performance metrics**: Request latency and tokens/second throughput
+- **JSON output**: Export raw responses with timing data for analysis
 
 #### Basic Usage
 
