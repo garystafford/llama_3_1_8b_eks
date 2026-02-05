@@ -61,7 +61,7 @@ Before deploying, you need to upload the Meta-Llama-3.1-8B-Instruct model to S3:
 
 > **Warning: Model Size and Timing**
 >
-> - Meta-Llama-3.1-8B-Instruct is **~32GB** (not 16GB)
+> - Meta-Llama-3.1-8B-Instruct is **~32GB**
 > - HuggingFace download: 15-30 minutes (depends on bandwidth)
 > - S3 upload: 10-20 minutes (depends on bandwidth and region)
 > - Ensure your `EMPTYDIR_SIZE` in config.env is at least **40Gi** (model size + buffer)
@@ -89,9 +89,6 @@ The project uses Kustomize for configuration management. Update configuration va
 ```bash
 # Copy the example config and customize it (1x)
 cp k8s/config/default-config.env.example k8s/config/default-config.env
-
-# Get the IP address or range to whitelist for the load balancer
-echo "$(curl -s ifconfig.me)/32"
 
 # Edit the config file with your values
 # Required changes:
@@ -312,6 +309,54 @@ The vLLM service exposes an OpenAI-compatible API:
 - `GET /v1/models` - List available models
 - `POST /v1/chat/completions` - Chat completion
 - `POST /v1/completions` - Text completion
+
+### Utility Scripts
+
+The project includes two Python scripts for interacting with the deployed LLM:
+
+#### test_llm_api.py
+
+Comprehensive test suite that validates all API endpoints:
+
+```bash
+# Test via HTTPS custom domain
+python scripts/test_llm_api.py --url https://analysis.creativitylabsai.com
+
+# Test via LoadBalancer
+python scripts/test_llm_api.py --url http://<loadbalancer-url>:8000
+
+# Test via port-forward
+kubectl port-forward -n analysis svc/llm 8000:8000 &
+python scripts/test_llm_api.py
+kill %1
+```
+
+Tests performed: health check, model listing, chat completion, text completion.
+
+#### prompt_llm.py
+
+Interactive prompting tool with full inference parameter control and performance metrics:
+
+```bash
+# Simple text completion
+python scripts/prompt_llm.py --url https://analysis.creativitylabsai.com \
+  --prompt "The future of artificial intelligence is"
+
+# Chat mode with system message
+python scripts/prompt_llm.py --url https://analysis.creativitylabsai.com \
+  --mode chat \
+  --system "You are a helpful Python programming assistant" \
+  --user-message "How do I sort a dictionary by value?"
+
+# Show performance metrics
+python scripts/prompt_llm.py --url https://analysis.creativitylabsai.com \
+  --prompt "What is machine learning?" \
+  --show-metadata
+```
+
+Features: text/chat completion modes, all vLLM inference parameters (temperature, top-p, top-k, penalties), multiple completions, performance metrics (latency, tokens/sec), JSON output.
+
+See [scripts/README.md](scripts/README.md) for complete documentation and advanced usage examples.
 
 ## Configuration
 
