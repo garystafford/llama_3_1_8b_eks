@@ -62,17 +62,20 @@ def test_chat_completion(base_url: str, model_name: str) -> bool:
         payload = {
             "model": model_name,
             "messages": [
-                {"role": "user", "content": "What is 2+2? Answer in one short sentence."}
+                {
+                    "role": "user",
+                    "content": "What is 2+2? Answer in one short sentence.",
+                }
             ],
             "max_tokens": 50,
-            "temperature": 0.7
+            "temperature": 0.7,
         }
 
         response = requests.post(
             f"{base_url}/v1/chat/completions",
             headers={"Content-Type": "application/json"},
             json=payload,
-            timeout=30
+            timeout=30,
         )
         response.raise_for_status()
         data = response.json()
@@ -97,14 +100,14 @@ def test_text_completion(base_url: str, model_name: str) -> bool:
             "model": model_name,
             "prompt": "The capital of France is",
             "max_tokens": 10,
-            "temperature": 0.1
+            "temperature": 0.1,
         }
 
         response = requests.post(
             f"{base_url}/v1/completions",
             headers={"Content-Type": "application/json"},
             json=payload,
-            timeout=30
+            timeout=30,
         )
         response.raise_for_status()
         data = response.json()
@@ -127,18 +130,14 @@ def main():
     parser.add_argument(
         "--url",
         default="http://localhost:8000",
-        help="Base URL of the LLM API (default: http://localhost:8000)"
+        help="Base URL of the LLM API (default: http://localhost:8000)",
     )
     parser.add_argument(
         "--model",
         default="meta-llama/Meta-Llama-3.1-8B-Instruct",
-        help="Model name to use for completions"
+        help="Model name to use for completions",
     )
-    parser.add_argument(
-        "--skip-health",
-        action="store_true",
-        help="Skip health check"
-    )
+    parser.add_argument("--skip-health", action="store_true", help="Skip health check")
 
     args = parser.parse_args()
 

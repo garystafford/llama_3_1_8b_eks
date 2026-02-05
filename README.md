@@ -60,6 +60,7 @@ python3 --version
 Before deploying, you need to upload the Meta-Llama-3.1-8B-Instruct model to S3:
 
 > **Warning: Model Size and Timing**
+>
 > - Meta-Llama-3.1-8B-Instruct is **~32GB** (not 16GB)
 > - HuggingFace download: 15-30 minutes (depends on bandwidth)
 > - S3 upload: 10-20 minutes (depends on bandwidth and region)
@@ -88,6 +89,9 @@ The project uses Kustomize for configuration management. Update configuration va
 ```bash
 # Copy the example config and customize it (1x)
 cp k8s/config/default-config.env.example k8s/config/default-config.env
+
+# Get the IP address or range to whitelist for the load balancer
+echo "$(curl -s ifconfig.me)/32"
 
 # Edit the config file with your values
 # Required changes:
@@ -129,22 +133,23 @@ kubectl apply -k k8s/overlays/production
 kubectl get pods -n analysis -w
 ```
 
-> **Deployment Timing Expectations**
->
+**Deployment Timing Expectations**
+
 > The pod initialization involves multiple stages:
-> 1. **Pending** (0-30s): Waiting for GPU node scheduling
-> 2. **Init:0/1** (2-5 min): Downloading 32GB model from S3 to EmptyDir volume
-> 3. **PodInitializing** (10-30s): Init container completing
-> 4. **Running** (1-3 min): vLLM loading 32GB model into GPU memory
-> 5. **Ready** (60s): Readiness probe waiting for API to be fully responsive
->
-> **Total time from apply to ready: 5-10 minutes**
->
-> Monitor init container logs to see S3 download progress:
-> ```bash
-> POD_NAME=$(kubectl get pods -n analysis -l app=llm -o jsonpath='{.items[0].metadata.name}')
-> kubectl logs -n analysis $POD_NAME -c model-sync -f
-> ```
+
+1. **Pending** (0-30s): Waiting for GPU node scheduling
+2. **Init:0/1** (2-5 min): Downloading 32GB model from S3 to EmptyDir volume
+3. **PodInitializing** (10-30s): Init container completing
+4. **Running** (1-3 min): vLLM loading 32GB model into GPU memory
+5. **Ready** (60s): Readiness probe waiting for API to be fully responsive
+   > **Total time from apply to ready: 5-10 minutes**
+   >
+   > Monitor init container logs to see S3 download progress:
+
+```bash
+POD_NAME=$(kubectl get pods -n analysis -l app=llm -o jsonpath='{.items[0].metadata.name}')
+kubectl logs -n analysis $POD_NAME -c model-sync -f
+```
 
 **Development Deployment** (base configuration):
 
@@ -445,6 +450,142 @@ API Client
 
 ## Troubleshooting
 
+### Connection Refused Errors When Testing
+
+**Problem**: Running `python scripts/test_llm_api.py` fails with connection refused errors.
+
+**Cause**: The test script defaults to `http://localhost:8000`, which requires an active port-forward.
+
+**Solution**: Specify the correct endpoint URL based on your access method:
+
+```bash
+# Option 1: Test via LoadBalancer (if IP is whitelisted)
+LB_URL=$(kubectl get svc llm-external -n analysis -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+python scripts/test_llm_api.py --url http://${LB_URL}:8000
+
+# Option 2: Test via HTTPS custom domain
+python scripts/test_llm_api.py --url https://analysis.creativitylabsai.com
+
+# Option 3: Test via port-forward (requires active port-forward)
+kubectl port-forward -n analysis svc/llm 8000:8000 &
+python scripts/test_llm_api.py --url http://localhost:8000
+kill %1
+```
+
+### DNS Cache and Propagation Issues
+
+**Problem**: After creating Route53 DNS records, the domain doesn't resolve or times out.
+
+**Cause**: Local DNS cache may have stale entries, or DNS propagation is still in progress.
+
+**Solution**: Flush DNS cache and wait for propagation:
+
+```bash
+# macOS: Flush DNS cache
+sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder
+
+# Linux: Flush DNS cache (systemd-resolved)
+sudo systemd-resolve --flush-caches
+
+# Wait a few seconds for cache to clear
+sleep 3
+
+# Verify DNS resolution
+dig analysis.creativitylabsai.com
+
+# Test HTTPS endpoint
+python scripts/test_llm_api.py --url https://analysis.creativitylabsai.com
+```
+
+**Note**: DNS propagation typically takes 1-5 minutes, but local cache can persist longer.
+
+### SSL Certificate Errors with ALB
+
+**Problem**: Testing the raw ALB endpoint fails with SSL certificate mismatch errors.
+
+**Cause**: The ALB has a wildcard certificate (e.g., `*.creativitylabsai.com`) that doesn't match the ALB's DNS name.
+
+**Solution**: Always test using the custom domain name, not the raw ALB endpoint:
+
+```bash
+# Don't test the raw ALB endpoint directly
+# ❌ curl https://k8s-analysis-llmingre-....elb.amazonaws.com  # Certificate error!
+
+# Test using your custom domain instead
+# ✅ curl https://analysis.creativitylabsai.com/v1/models
+python scripts/test_llm_api.py --url https://analysis.creativitylabsai.com
+```
+
+### Deployment Takes Longer Than Expected
+
+**Problem**: Pod stays in `Init:0/1` or `PodInitializing` state for 8-12 minutes.
+
+**Cause**: The 32GB model is being downloaded from S3, which is normal and expected.
+
+**Expected Timeline**:
+
+1. **Init:0/1** (2-8 min): Downloading 32GB model from S3 to EmptyDir volume
+2. **PodInitializing** (10-30s): Init container completing
+3. **Running** (1-3 min): vLLM loading model into GPU memory and compiling CUDA graphs
+4. **Ready** (30-60s): Readiness probe waiting for API responsiveness
+
+> **Total deployment time: 5-12 minutes** depending on S3 bandwidth and network conditions.
+
+**How to Monitor Progress**:
+
+```bash
+# Watch pod status
+kubectl get pods -n analysis -w
+
+# Monitor S3 download progress
+POD_NAME=$(kubectl get pods -n analysis -l app=llm -o jsonpath='{.items[0].metadata.name}')
+kubectl logs -n analysis $POD_NAME -c model-sync -f
+
+# Monitor vLLM model loading (after init completes)
+kubectl logs -n analysis $POD_NAME -c llm -f
+```
+
+### Security Group Blocking Access
+
+**Problem**: LoadBalancer or HTTPS endpoint is unreachable even with correct URL.
+
+**Cause**: Your IP address may not be whitelisted in the LoadBalancer configuration, or security groups are blocking traffic.
+
+**Solution**:
+
+1. **Update IP whitelist in config.env**:
+
+```bash
+# Get your current public IP
+echo "$(curl -s ifconfig.me)/32"
+
+# Update k8s/overlays/production/config.env
+vim k8s/overlays/production/config.env
+# Set: LOADBALANCER_IP_WHITELIST=YOUR_IP/32
+
+# Reapply configuration
+kubectl apply -k k8s/overlays/production
+```
+
+2. **Update security groups for ALB access**:
+
+```bash
+# Find the ALB security group
+ALB_SG=$(aws elbv2 describe-load-balancers \
+  --query 'LoadBalancers[?contains(DNSName, `llmingre`)].SecurityGroups[0]' \
+  --output text)
+
+# Add your IP to the security group for HTTPS
+aws ec2 authorize-security-group-ingress \
+  --group-id $ALB_SG \
+  --ip-permissions IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges="[{CidrIp=YOUR_IP/32}]"
+
+# Also add for HTTP (redirect to HTTPS)
+aws ec2 authorize-security-group-ingress \
+  --group-id $ALB_SG \
+  --ip-permissions IpProtocol=tcp,FromPort=80,ToPort=80,IpRanges="[{CidrIp=YOUR_IP/32}]"
+```
+
 ### Pod Not Starting
 
 Check init container logs for S3 download issues:
@@ -469,7 +610,7 @@ kubectl logs -n analysis <pod-name> -c llm
 
 Common issues:
 
-- Insufficient GPU memory (need 48GB VRAM for 8B model)
+- Insufficient GPU memory (need 24GB VRAM for 8B model)
 - Model path incorrect in deployment
 - HuggingFace token not set correctly
 
@@ -484,9 +625,10 @@ kubectl describe svc llm-external -n analysis
 
 Common issues:
 
-- Security groups blocking traffic
+- Security groups blocking traffic (see "Security Group Blocking Access" above)
 - LoadBalancer not yet provisioned (can take 2-3 minutes)
 - Wrong AWS region
+- IP not whitelisted in `LOADBALANCER_IP_WHITELIST`
 
 ## Technologies Used
 
