@@ -111,8 +111,7 @@ spec:
           operator: "Exists"
           effect: "NoSchedule"
       nodeSelector:
-        node.kubernetes.io/instance-type: $(INSTANCE_TYPE)
-        workload: analysis
+        workload: gpu-pool
 ---
 apiVersion: v1
 kind: Service

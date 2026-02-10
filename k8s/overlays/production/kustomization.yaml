@@ -143,16 +143,6 @@ replacements:
       kind: Deployment
       name: llm
 - source:
-    fieldPath: data.INSTANCE_TYPE
-    kind: ConfigMap
-    name: llm-config
-  targets:
-  - fieldPaths:
-    - spec.template.spec.nodeSelector.[node.kubernetes.io/instance-type]
-    select:
-      kind: Deployment
-      name: llm
-- source:
     fieldPath: data.AWS_ACCOUNT_ID
     kind: ConfigMap
     name: llm-config
@@ -237,18 +227,6 @@ replacements:
   targets:
   - fieldPaths:
     - spec.template.spec.initContainers.[name=model-sync].env.[name=MODEL_REPO_DASHED].value
-    select:
-      kind: Deployment
-      name: llm
-
-# Workload label for node selection
-- source:
-    fieldPath: data.WORKLOAD_LABEL
-    kind: ConfigMap
-    name: llm-config
-  targets:
-  - fieldPaths:
-    - spec.template.spec.nodeSelector.workload
     select:
       kind: Deployment
       name: llm
