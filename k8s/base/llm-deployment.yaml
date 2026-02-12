@@ -111,7 +111,7 @@ spec:
           operator: "Exists"
           effect: "NoSchedule"
       nodeSelector:
-        workload: gpu-pool
+        workload: personaplex
 ---
 apiVersion: v1
 kind: Service
